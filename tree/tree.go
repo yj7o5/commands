@@ -1,4 +1,4 @@
-package tree
+package main
 
 import (
 	"errors"
@@ -13,7 +13,8 @@ import (
 )
 
 func main() {
-    dn := "/Users/yawarjamal/projects/commands/data"
+    homedir, err := os.UserHomeDir()
+    dn := fmt.Sprintf("%s/projects/commands/data", homedir)
     files, err := ReadDir(dn)
     if err != nil {
         fmt.Println(err)
@@ -27,8 +28,15 @@ func main() {
     processCommand(files, *args)
 }
 
+func removePreSuffix(str string, pf string, sf string) string {
+    if strings.HasPrefix(str, pf) { str = strings.TrimPrefix(str, "\"") }
+    if strings.HasSuffix(str, sf) { str = strings.TrimSuffix(str, "\"") }
+    return str
+}
+
 func parseArgs(argList []string) (*ArgumentList, error) {
     flags := &ArgumentList{}
+
     for i, a := range argList {
         switch a {
         case "-a":
@@ -56,12 +64,14 @@ func parseArgs(argList []string) (*ArgumentList, error) {
             if i+1 >= len(argList) {
                 return nil, errors.New("tree: expected [pattern] after -P flag")
             }
-            flags.PFlag = &argList[i+1]
+            str := removePreSuffix(argList[i+1], "\"", "\"")
+            flags.PFlag = &str
         case "-I":
             if i+1 >= len(argList) {
                 return nil, errors.New("tree: expected [pattern] after -I flag")
             }
-            flags.IFlag = &argList[i+1]
+            str := removePreSuffix(argList[i+1], "\"", "\"")
+            flags.IFlag = &str
         }
     }
 

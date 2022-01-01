@@ -1,5 +1,5 @@
 build: 
-	go build -o ./tree ./tree.go
+	go build -o ./out/tree ./tree/tree.go
 
 run: build
-	./tree
+	./out/tree
