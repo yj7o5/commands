@@ -12,6 +12,29 @@ import (
 	"github.com/fatih/color"
 )
 
+type ArgumentList struct {
+    aFlag           bool    // All files are printed.
+    LFlag           *int    // Max display depth of the directory tree.
+    dFlag           bool    // List directories only.
+    sFlag           bool    // Print the size of each file in bytes along with the name.
+    pFlag           bool    // Print the file type and permissions for each file (as per ls -l).
+    IFlag           *string  // Do not list those files that match the wild-card pattern.
+    PFlag           *string  // List only those files that match the wild-card patttern.
+}
+
+type File struct {
+    level   int
+    name    string
+    isDir   bool
+    size    int64
+    perm    string
+}
+
+type Counters struct {
+    dirCount    int
+    filesCount  int
+}
+
 func main() {
     homedir, err := os.UserHomeDir()
     dn := fmt.Sprintf("%s/projects/commands/data", homedir)
@@ -29,8 +52,6 @@ func main() {
 }
 
 func removePreSuffix(str string, pf string, sf string) string {
-    if strings.HasPrefix(str, pf) { str = strings.TrimPrefix(str, "\"") }
-    if strings.HasSuffix(str, sf) { str = strings.TrimSuffix(str, "\"") }
     return str
 }
 
@@ -64,13 +85,17 @@ func parseArgs(argList []string) (*ArgumentList, error) {
             if i+1 >= len(argList) {
                 return nil, errors.New("tree: expected [pattern] after -P flag")
             }
-            str := removePreSuffix(argList[i+1], "\"", "\"")
+            str := argList[i+1]
+            if strings.HasPrefix(str, "\"") { str = strings.TrimPrefix(str, "\"") }
+            if strings.HasSuffix(str, "\"") { str = strings.TrimSuffix(str, "\"") }
             flags.PFlag = &str
         case "-I":
             if i+1 >= len(argList) {
                 return nil, errors.New("tree: expected [pattern] after -I flag")
             }
-            str := removePreSuffix(argList[i+1], "\"", "\"")
+            str := argList[i+1]
+            if strings.HasPrefix(str, "\"") { str = strings.TrimPrefix(str, "\"") }
+            if strings.HasSuffix(str, "\"") { str = strings.TrimSuffix(str, "\"") }
             flags.IFlag = &str
         }
     }
@@ -78,20 +103,10 @@ func parseArgs(argList []string) (*ArgumentList, error) {
     return flags, nil
 }
 
-type ArgumentList struct {
-    aFlag           bool    // All files are printed.
-    LFlag           *int    // Max display depth of the directory tree.
-    dFlag           bool    // List directories only.
-    sFlag           bool    // Print the size of each file in bytes along with the name.
-    pFlag           bool    // Print the file type and permissions for each file (as per ls -l).
-    IFlag           *string  // Do not list those files that match the wild-card pattern.
-    PFlag           *string  // List only those files that match the wild-card patttern.
-}
-
 func processCommand(files []File, args ArgumentList) {
-    dirCnt, fileCnt := 0, 0
+    counters := Counters{}
 
-    bFmt := color.New(color.FgBlue)
+    colorFmt := color.New(color.FgBlue)
 
     for i := len(files)-1; i >= 0; i-- {
         f := files[i]
@@ -110,77 +125,67 @@ func processCommand(files []File, args ArgumentList) {
 
         if args.IFlag != nil {
             m, _ := regexp.Match(*args.IFlag, []byte(f.name))
-            if m {
-                continue
-            }
+            if m { continue }
         }
 
         if args.PFlag != nil {
             m, _ := regexp.Match(*args.PFlag, []byte(f.name))
-            if !m {
-                continue
-            }
-        }
-
-        if args.PFlag != nil && true {
-            continue
+            if !m { continue }
         }
 
         if f.isDir {
-            dirCnt += 1
+            counters.dirCount += 1
         } else {
-            fileCnt += 1
+            counters.filesCount += 1
         }
 
-        indent := ""
-        for i:=0; i<f.level; i++ { indent += "  " }
+        t := "%*s"
+        indent := f.level
+        if f.isDir {
+            t = "|" + t
+        }
 
-        template := "%s-- %s"
         var v []interface{}
-        v = append(v, indent, f.name)
+        v = append(v, indent + len(f.name), f.name)
 
         if args.sFlag {
-            template += " [%d]"
+            t += " [%d]"
             v = append(v, f.size)
         }
 
         if args.pFlag {
-            template += " [%s]"
+            t += " [%s]"
             v = append(v, f.perm)
         }
 
+        var op string
+
         if f.isDir {
-            bFmt.Printf(template + "\n", v...)
+            op = colorFmt.Sprintf(t + "\n", v...)
         } else {
-            fmt.Printf(template + "\n", v...)
+            op = fmt.Sprintf(t + "\n", v...)
         }
+
+        fmt.Print(op)
     }
 
-    printStats(dirCnt, fileCnt)
+    printCounters(counters)
 }
 
-func printStats(dirCount int, fileCount int) {
+func printCounters(c Counters) {
     msg := ""
-    if dirCount == 1 {
+    if c.dirCount == 1 {
         msg += fmt.Sprint("1 directory, ")
     } else {
-        msg += fmt.Sprintf("%d directories, ", dirCount)
+        msg += fmt.Sprintf("%d directories, ", c.dirCount)
     }
-    if fileCount == 1 {
+    if c.filesCount == 1 {
         msg += fmt.Sprint("1 file")
     } else {
-        msg += fmt.Sprintf("%d files", dirCount)
+        msg += fmt.Sprintf("%d files", c.filesCount)
     }
 
     fmt.Print("\n\n", msg)
-}
-
-type File struct {
-    level   int
-    name    string
-    isDir   bool
-    size    int64
-    perm    string
 }
 
 func ReadDir(dirname string) ([]File, error) {
