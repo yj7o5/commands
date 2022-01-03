@@ -13,13 +13,18 @@ import (
 )
 
 type ArgumentList struct {
+    /* LISTING OPTIONS */
     aFlag           bool    // All files are printed.
     LFlag           *int    // Max display depth of the directory tree.
     dFlag           bool    // List directories only.
+    IFlag           *string // Do not list those files that match the wild-card pattern.
+    PFlag           *string // List only those files that match the wild-card patttern.
+    fFlag           bool    // Prints the full path prefix for each file.
+
+    /* FILE OPTIONS */
     sFlag           bool    // Print the size of each file in bytes along with the name.
     pFlag           bool    // Print the file type and permissions for each file (as per ls -l).
-    IFlag           *string  // Do not list those files that match the wild-card pattern.
-    PFlag           *string  // List only those files that match the wild-card patttern.
+    QFlag           bool    // Quote the names of files in double quotes
 }
 
 type File struct {
@@ -28,6 +33,7 @@ type File struct {
     isDir   bool
     size    int64
     perm    string
+    path    string
 }
 
 type Counters struct {
@@ -97,6 +103,10 @@ func parseArgs(argList []string) (*ArgumentList, error) {
             if strings.HasPrefix(str, "\"") { str = strings.TrimPrefix(str, "\"") }
             if strings.HasSuffix(str, "\"") { str = strings.TrimSuffix(str, "\"") }
             flags.IFlag = &str
+        case "-Q":
+            flags.QFlag = true
+        case "-f":
+            flags.fFlag = true
         }
     }
 
@@ -133,6 +143,16 @@ func processCommand(files []File, args ArgumentList) {
             if !m { continue }
         }
 
+        name := f.name
+
+        if args.fFlag {
+            name = f.path
+        }
+
+        if args.QFlag {
+            name = fmt.Sprintf("\"%s\"", name)
+        }
+
         if f.isDir {
             counters.dirCount += 1
         } else {
@@ -141,12 +161,13 @@ func processCommand(files []File, args ArgumentList) {
 
         t := "%*s"
         indent := f.level
+
         if f.isDir {
             t = "|" + t
         }
 
         var v []interface{}
-        v = append(v, indent + len(f.name), f.name)
+        v = append(v, indent + len(name), name)
 
         if args.sFlag {
             t += " [%d]"
@@ -214,6 +235,7 @@ func readDir(dirname string, fnames *[]File, level int) error {
             isDir: f.IsDir(),
             size: fi.Size(),
             perm: fi.Mode().String(),
+            path: path.Join(dirname, f.Name()),
         }
         *fnames = append(*fnames, file)
     }
